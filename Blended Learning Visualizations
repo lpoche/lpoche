@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Feb  5 13:40:59 2022
+
+@author: lewispoche
+"""
+import os
+import pandas as pd
+import matplotlib.pyplot  as plt
+import numpy as np
+
+root = '/Users/lewispoche/Documents/HPL/nweamap-selected'
+
+def open_files(path):
+                
+    os.chdir(path)
+    file_names = os.listdir()
+
+    for file_name in file_names:
+        if '.csv' in file_name:                                 
+            file_path = os.path.join(path, file_name)           #file_path is name of csv file
+            read_csv(file_path)                                 #calls function to read
+            continue
+        elif '.' in file_name:                                  #avoids random other files
+            continue
+        os.chdir(os.path.join(path, file_name))
+        open_files(os.getcwd())
+
+def read_csv(path):
+    df = pd.read_csv(path)
+    dfs.update({path:df})                                       #dictionary of dfs. key is csv file path name
+    return
+
+def create_key_name(date, school, file):                        #to access the df, use key which is file name
+    file_path = os.path.join(root, date, school, file)  
+    return file_path
+
+def join_df():                              #'AssessmentResults.csv'
+    for date in range(len(dates)):
+        for school in range(len(schools)):
+            key1 = create_key_name(dates[date], schools[school], files[1]) #student key
+            key2 = create_key_name(dates[date], schools[school], files[3]) #assessment key
+            df1 = dfs.get(key1)                                             # student data frame
+            df2 = dfs.get(key2)
+            try:#assessment data frame
+                df = df1.merge(df2,on='StudentID',how='left')
+                key = create_key_name(dates[date], schools[school], "master")
+                df.dropna(axis='columns',inplace=True, how='all')
+                dfs.update({key:df})
+            except:
+                print("No data in: ",key1)
+    return
+
+def cgp():
+
+    df_cols = ["Date", "School", "Subject",       
+             "FallToWinterConditionalGrowthPercentile",
+            "WinterToSpringConditionalGrowthPercentile",
+            "FallToSpringConditionalGrowthPercentile",
+            "FallToFallConditionalGrowthPercentile",
+            "WinterToWinterConditionalGrowthPercentile",
+            "SpringToSpringConditionalGrowthPercentile",]
+    df_cgp = pd.DataFrame(columns=df_cols)
+    for date in dates:
+        for school in schools:
+            for subject in subjects:
+                data_series = pd.Series({'Date': date, 'School': school, 'Subject':subject})
+                for metric in metrics:
+                    key = create_key_name(date, school, "master") #student key
+                    df = dfs.get(key)
+                    try:
+                        df_subject = df[df["Subject"]==subject]
+                        cgp = df_subject[metric]
+                        median_cgp = cgp.median()
+                        # print (date, school, median_cgp)
+                    except:
+                        # print ("Not working for ", key,metric)
+                        median_cgp = None
+                        continue
+                    data_series = data_series.append(pd.Series({str(metric): median_cgp}))
+                df_cgp = df_cgp.append(data_series,ignore_index=True)
+    df_cgp.to_csv("cgp.csv", index=False)
+    return df_cgp
+
+def pr():
+
+    df_cols = ["Date", "DateAbv", "School", "Subject", "TestPercentile",]
+    df_pr = pd.DataFrame(columns=df_cols)
+    for date, date_abv in zip(dates, dates_abbreviated):
+        for school in schools:
+            for subject in subjects:
+                data_series = pd.Series({'Date': date, 'DateAbv': date_abv, 'School': school, 'Subject':subject})
+                # for metric in metrics:
+                key = create_key_name(date, school, "master") #student key
+                df = dfs.get(key)
+                try:
+                    df_subject = df[df["Subject"]==subject]
+                    pr = df_subject["TestPercentile"]
+                    median_pr = pr.median()
+                    # print (date, school, median_cgp)
+                except:
+                    # print ("Not working for ", key,metric)
+                    median_pr = None
+                    continue
+                data_series = data_series.append(pd.Series({"TestPercentile": median_pr}))
+                df_pr = df_pr.append(data_series,ignore_index=True)
+    df_pr.to_csv("pr.csv", index=False)
+    return df_pr
+
+
+def graphing_cgp():
+        for school, school_full in zip(schools, schools_full):
+            for subject in subjects:
+                values = df_cgp[df_cgp["Subject"]==subject]
+                values = values[values["School"]==school]
+                values = values.iloc[: , 3:]
+                for metric in metrics:
+                    x = np.arange(len(dates))
+                    y = values[metric]
+                    plt.plot(dates_abbreviated, y, 'o-')
+                    
+                    series1 = np.array(y).astype(np.double)
+                    s1mask = np.isfinite(series1)
+                
+                    plt.plot(x[s1mask], series1[s1mask], linestyle='-', marker='o')
+                plt.legend(metrics_abbreviated)
+                title = "CGP - " + school_full + " - " + subject
+                plt.title(title)
+                fname = "CGP" + school + subject
+                plt.savefig(fname)
+                plt.grid()
+                plt.show()
+                
+def graphing_pr():
+        for school, school_full in zip(schools, schools_full):
+            for subject in subjects:
+                values = df_pr[df_pr["Subject"]==subject]
+                values = values[values["School"]==school]
+                # values = values.iloc[: , 3:]
+                # for metric in metrics:
+                x = values["DateAbv"]
+                y = values["TestPercentile"]
+                plt.plot(x, y, 'o-')
+                
+                series1 = np.array(y).astype(np.double)
+                s1mask = np.isfinite(series1)
+            
+                plt.plot(x[s1mask], series1[s1mask], linestyle='-', marker='o')
+                    
+                # plt.legend(metrics_abbreviated)
+                title = "PR - " + school_full + " - " + subject
+                plt.title(title)
+                fname = "PR" + school + subject
+                plt.savefig(fname)
+                plt.grid()
+                plt.show()
+                    
+    
+
+#for each school and each test, find rit score
+
+dfs = {}
+open_files(root)                                                #opens all files and imports into dfs
+os.chdir(root)
+
+dates = ['fall2015', 
+         'winter20152016',
+         'spring2016', 
+         'fall2016', 
+         'winter20162017', 
+         'spring2017', 
+         'fall2017', 
+         'winter20172018',
+         'spring2018', 
+         'fall2018', 
+         'winter20182019', 
+         'spring2019', 
+         'fall2019', 
+         'winter20192020', 
+         'fall2020', 
+         'winter20202021', 
+         'spring2021']
+
+dates_abbreviated = ['F15', 
+         'W16',
+         'S16', 
+         'F16', 
+         'W17', 
+         'S17', 
+         'F17', 
+         'W18',
+         'S18', 
+         'F18', 
+         'W19', 
+         'S19', 
+         'F19', 
+         'W20', 
+         'F20', 
+         'W21', 
+         'S21']
+
+schools = ['asc', 'nat', 'cos', 'jp2', 'sta']
+
+schools_full = ['Ascension', 'Nativity', 'Community of Saints', 'John Paul II', 'St. Alphonsus']
+
+files = ['ClassAssignments.csv', 'StudentsBySchool.csv', 'AccommodationAssignment.csv', 'AssessmentResults.csv', 'ProgramAssignments.csv']
+
+metrics = [
+    "FallToWinterConditionalGrowthPercentile",
+    "WinterToSpringConditionalGrowthPercentile",
+    "FallToSpringConditionalGrowthPercentile",
+    "FallToFallConditionalGrowthPercentile",
+    "WinterToWinterConditionalGrowthPercentile",
+    "SpringToSpringConditionalGrowthPercentile",
+    ]
+
+metrics_abbreviated = [
+    "F-W CGP",
+    "W-S GCP",
+    "F-S CGP",
+    "F-F CGP",
+    "W-W GCP",
+    "S-S CGP",
+    ]
+subjects = ["Mathematics" , "Language Arts"]
+
+join_df()
+# df_cgp = cgp()
+# graphing_cgp()
+
+df_pr = pr()
+graphing_pr()
