@@ -1,0 +1,107 @@
+################################################
+#  SMU Senior Design Project - Spring 2019     #
+#  Lewis Poche, Garrett Carson, David Hoffmann #
+################################################
+
+offers_colleges = read.csv("full.csv",header=TRUE)
+
+offers_colleges$efc = as.factor(offers_colleges$efc)
+offers_colleges = na.omit(offers_colleges)
+
+grant_inst <- offers_colleges[offers_colleges$type=="Grant_Institutional",]
+grant_other <- offers_colleges[offers_colleges$type=="Grant_Other",]
+loan <- offers_colleges[offers_colleges$type=="Loan",] #self help aid
+wrkstd <- offers_colleges[offers_colleges$type=="Work Study",] #self help aid
+scholarship <- offers_colleges[offers_colleges$type=="Scholarship",]
+
+library(caTools)
+library(caret)
+###scholarships##########
+spl = sample.split(scholarship$total_amount, SplitRatio = 0.80)
+Schol_Train = subset(scholarship, spl==TRUE)
+Schol_Test = subset(scholarship, spl==FALSE)
+
+#3 fold cv
+train_control <- trainControl(method="cv", number=3)
+Schol_Predict = train(total_amount ~ gpa_weighted + best_act_composite + tuition_in_state, data=Schol_Train, trControl=train_control, method='lm')
+
+summary(Schol_Predict) #39 on training
+
+write.csv(as.data.frame(summary(Schol_Predict)$coef), file="Schol_Predict.csv")
+
+ScholarshipPredictions = predict(Schol_Predict, newdata = Schol_Test)
+SSE = sum((Schol_Test$total_amount - ScholarshipPredictions)^2)
+SST = sum((Schol_Test$total_amount - mean(Schol_Train$total_amount))^2)
+1 - SSE/SST #varies between 43 and 52 on testing
+
+
+
+###########Inst Grants#########
+
+spl = sample.split(grant_inst$total_amount, SplitRatio = 0.80)
+Grant_Inst_Train = subset(grant_inst, spl==TRUE)
+Grant_Inst_Test = subset(grant_inst, spl==FALSE)
+
+#3 fold cv
+train_control <- trainControl(method="cv", number=3)
+Grant_Inst_Predict = train(total_amount ~ gpa_weighted + best_act_composite + tuition_in_state, data=Grant_Inst_Train, trControl=train_control, method='lm')
+
+summary(Grant_Inst_Predict) #39 on training
+
+write.csv(as.data.frame(summary(Grant_Inst_Predict)$coef), file="Grant_Inst_Predict.csv")
+
+Grant_InstPredictions = predict(Grant_Inst_Predict, newdata = Grant_Inst_Test)
+SSE = sum((Grant_Inst_Test$total_amount - Grant_InstPredictions)^2)
+SST = sum((Grant_Inst_Test$total_amount - mean(Grant_Inst_Train$total_amount))^2)
+1 - SSE/SST 
+
+###########Other Grants#########
+grant_other = na.omit(grant_other)
+spl = sample.split(grant_other$total_amount, SplitRatio = 0.80)
+Grant_Other_Train = subset(grant_other, spl==TRUE)
+Grant_Other_Test = subset(grant_other, spl==FALSE)
+
+#3 fold cv
+train_control <- trainControl(method="cv", number=3)
+Grant_Other_Predict = train(total_amount ~ class_of + efc , data=Grant_Other_Train, trControl=train_control, method='lm')
+
+summary(Grant_Other_Predict) #39 on training
+
+write.csv(as.data.frame(summary(Grant_Other_Predict)$coef), file="Grant_Other_Predict.csv")
+
+Grant_OtherPredictions = predict(Grant_Other_Predict, newdata = Grant_Other_Test)
+SSE = sum((Grant_Other_Test$total_amount - Grant_OtherPredictions)^2)
+SST = sum((Grant_Other_Test$total_amount - mean(Grant_Other_Train$total_amount))^2)
+1 - SSE/SST 
+
+############Loans#########
+spl = sample.split(loan$total_amount, SplitRatio = 0.80)
+Loan_Train = subset(loan, spl==TRUE)
+Loan_Test = subset(loan, spl==FALSE)
+
+Loan_Predict = lm(total_amount ~ best_act_composite + efc + ecc + tuition_in_state, data=Loan_Train)
+
+summary(Loan_Predict) #3 on training
+
+write.csv(as.data.frame(summary(Loan_Predict)$coef), file="Loan_Predict.csv")
+
+LoanPredictions = predict(Loan_Predict, newdata = Loan_Test)
+SSE = sum((Loan_Test$total_amount - LoanPredictions)^2)
+SST = sum((Loan_Test$total_amount - mean(Loan_Train$total_amount))^2)
+1 - SSE/SST  #.1% on testing
+
+############Work Study#########
+spl = sample.split(wrkstd$total_amount, SplitRatio = 0.80)
+Work_Study_Train = subset(wrkstd, spl==TRUE)
+Work_Study_Test = subset(wrkstd, spl==FALSE)
+
+Work_Study_Predict = lm(total_amount ~ class_of + best_act_composite + tuition_in_state, data=Work_Study_Train)
+
+summary(Work_Study_Predict) #25 on training
+
+write.csv(as.data.frame(summary(Work_Study_Predict)$coef), file="Work_Study_Predict.csv")
+
+Work_StudyPredictions = predict(Work_Study_Predict, newdata = Work_Study_Test)
+SSE = sum((Work_Study_Test$total_amount - Work_StudyPredictions)^2)
+SST = sum((Work_Study_Test$total_amount - mean(Work_Study_Train$total_amount))^2)
+1 - SSE/SST #varies between 21 and 30 on testing
